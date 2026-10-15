@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HookRelay — Real-Time Webhook Inspector & Event Forwarding Engine</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- Top Navigation & Endpoint Bar -->
+  <header class="app-header">
+    <div class="brand">
+      <div class="brand-logo">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <polyline points="16 18 22 12 16 6"></polyline>
+          <polyline points="8 6 2 12 8 18"></polyline>
+        </svg>
+      </div>
+      <div>
+        <h1 class="brand-title">HookRelay</h1>
+        <div class="live-tag"><span class="dot"></span> Live Inspector</div>
+      </div>
+    </div>
+
+    <!-- Active Webhook Endpoint Pill -->
+    <div class="endpoint-pill-wrapper">
+      <span class="endpoint-label">LISTENING ENDPOINT:</span>
+      <div class="endpoint-url-box">
+        <span class="method-badge post">POST</span>
+        <code id="fullEndpointUrl">http://localhost:5150/webhook/default-hook</code>
+      </div>
+      <button id="btnCopyUrl" class="btn-action" title="Copy Webhook URL">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+        </svg>
+        <span>Copy URL</span>
+      </button>
+      <button id="btnCopyCurl" class="btn-action btn-outline" title="Copy Test cURL Command">
+        <span>Copy cURL</span>
+      </button>
+    </div>
+
+    <!-- Simulator Button & Actions -->
+    <div class="header-right">
+      <button id="btnSimulate" class="btn-action btn-sim" title="Simulate a Webhook Dispatch">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polygon points="5 3 19 12 5 21 5 3"></polygon>
+        </svg>
+        <span>Simulate Event</span>
+      </button>
+      <button id="btnClear" class="btn-icon" title="Clear All Captured Events">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="3 6 5 6 21 6"></polyline>
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- Workspace Split Layout -->
+  <main class="workspace">
+    <!-- Left Panel: Event Stream List -->
+    <aside class="events-sidebar">
+      <div class="sidebar-header">
+        <span class="sidebar-title">Captured Requests</span>
+        <span id="eventCountBadge" class="count-badge">0</span>
+      </div>
+      <div id="eventsList" class="events-list">
+        <div class="empty-state">
+          <div class="empty-icon">📡</div>
+          <p>Waiting for incoming requests...</p>
+          <small>Send any POST/GET request to your endpoint or click "Simulate Event" above.</small>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Right Panel: Deep Request Inspector -->
+    <section class="inspector-panel" id="inspectorPanel">
+      <div id="noSelectionView" class="no-selection-view">
+        <div class="radar-scan"></div>
+        <h3>Select a request from the sidebar</h3>
+        <p>Inspect raw payload, HTTP headers, query parameters, or relay to a local development server.</p>
+      </div>
+
+      <div id="activeEventView" class="active-event-view" style="display: none;">
+        <!-- Request Summary Header -->
+        <div class="event-summary-bar">
+          <div class="summary-left">
+            <span id="inspMethod" class="method-tag post">POST</span>
+            <span id="inspEventId" class="event-id">evt_923847</span>
+            <span id="inspTimestamp" class="event-time">2026-10-15 13:28:00</span>
+          </div>
+          <div class="summary-right">
+            <span id="inspSize" class="meta-tag">0 bytes</span>
+            <span id="inspIp" class="meta-tag">127.0.0.1</span>
+          </div>
+        </div>
+
+        <!-- Relay Forwarder Bar -->
+        <div class="relay-bar">
+          <div class="relay-input-group">
+            <span class="relay-label">RELAY TO:</span>
+            <input type="text" id="relayTargetInput" placeholder="http://localhost:3000/api/webhook" />
+          </div>
+          <button id="btnRelayForward" class="btn-action btn-relay">
+            <span>Forward Now ➔</span>
+          </button>
+        </div>
+        <div id="relayStatusDisplay" class="relay-status-display" style="display: none;"></div>
+
+        <!-- Tabs Navigation -->
+        <div class="inspector-tabs">
+          <button class="tab-btn active" data-tab="payload">JSON Payload</button>
+          <button class="tab-btn" data-tab="headers">Headers (<span id="headerCount">0</span>)</button>
+          <button class="tab-btn" data-tab="query">Query Params</button>
+          <button class="tab-btn" data-tab="curl">cURL Reproduction</button>
+        </div>
+
+        <!-- Tab Contents -->
+        <div class="tab-content active" id="tabPayload">
+          <pre><code id="payloadJsonView">{}</code></pre>
+        </div>
+
+        <div class="tab-content" id="tabHeaders">
+          <table class="headers-table" id="headersTable">
+            <thead>
+              <tr><th>Header Key</th><th>Header Value</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <div class="tab-content" id="tabQuery">
+          <pre><code id="queryJsonView">{}</code></pre>
+        </div>
+
+        <div class="tab-content" id="tabCurl">
+          <pre><code id="curlView">curl -X POST ...</code></pre>
+        </div>
+
+      </div>
+    </section>
+  </main>
+
+  <div id="toastContainer" class="toast-container"></div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
